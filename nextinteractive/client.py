@@ -55,7 +55,7 @@ class Client(object):
         endpoint = "/CopyDispositions"
         return self._post(endpoint, **data)
 
-    def create_campaign(self, campaign_name, _type, template_id, custom_fields, new_lead_name, template_name=None):
+    def create_campaign(self, campaign_name, _type, template_id, new_lead_name, template_name=None, custom_fields=None):
         """
         Creates a campaign and returns an xml structure e.g. <Data LeadID="22095" TemplateID="923" CampID="1983" />
         :param campaign_name: is the name of the campaign to be created
