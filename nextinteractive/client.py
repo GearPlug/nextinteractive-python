@@ -1,5 +1,6 @@
 from urllib.parse import urlencode
 from xml.etree import cElementTree as ET
+from collections import OrderedDict
 
 import requests
 import xmltodict
@@ -55,7 +56,7 @@ class Client(object):
         endpoint = "/CopyDispositions"
         return self._post(endpoint, **data)
 
-    def create_campaign(self, campaign_name, _type, template_id, new_lead_name, template_name=None, custom_fields=None):
+    def create_campaign(self, campaign_name, _type, new_lead_name, template_name, template_id, custom_fields=None):
         """
         Creates a campaign and returns an xml structure e.g. <Data LeadID="22095" TemplateID="923" CampID="1983" />
         :param campaign_name: is the name of the campaign to be created
@@ -72,8 +73,10 @@ class Client(object):
         :param new_lead_name: The name of the lead that will be assigned to the new campaign
         :return: <Data LeadID="22095" TemplateID="923" CampID="1983" />
         """
-        data = {"CampaignName": campaign_name, "Type": _type, "TemplateName": template_name, "TemplateID": template_id,
-                "CustFlds": custom_fields, "NewLeadName": new_lead_name}
+        data = {"CampaignName": campaign_name, "Type": _type, "NewLeadName": new_lead_name,
+                "TemplateName": template_name, "TemplateID": template_id}
+        if custom_fields is not None:
+            data["CustFlds"] = custom_fields
         endpoint = "/CreateCampaign"
         return self._post(endpoint, **data)
 
@@ -327,37 +330,26 @@ class Client(object):
     def _request(self, method, endpoint, **kwargs):
         headers = {'content-type': "application/x-www-form-urlencoded"}
         url = BASE_URL + API_URL + endpoint
-        return self._parse(
-            requests.request(method, url, auth=(self._user, self._passwd), headers=headers, data=kwargs))
-
-    def _unparse(self, data):
-        """
-        Convert dict or json to xml
-        :param data: json or dict
-            {
-              "data" : {
-                "name" : "Shubham",
-                "marks" : {
-                  "math" : 92,
-                  "english" : 99
-                },
-                "id" : "s387hs3"
-              }
-            }
-        :return:
-        """
-        if isinstance(data, dict):
-            return xmltodict.unparse(data, pretty=True)
+        if method == 'GET':
+            return self._parse(
+                requests.request(method, url, auth=(self._user, self._passwd), headers=headers, data=kwargs))
         else:
-            return False
+            response = requests.request(method, url, auth=(self._user, self._passwd), headers=headers, data=kwargs)
+            clean_response = self._parse(response)
+            return clean_response
 
     def _parse(self, response):
+        if "System." in response.text:
+            return response.text
         if response.status_code == 200:
             root = ET.fromstring(response.text)
-            result = json.dumps(xmltodict.parse(root.text))
-            if len(result) == 0 and 'Success' in response.text:
-                return True
-            else:
-                return result
+        if len(root) == 0 and 'Failed' in root.text:
+            return root.text
+        elif len(root) == 0 and 'Success' in root.text:
+            return root.text
         else:
-            return "error: \n{}".format(response.text)
+            first_pass = xmltodict.parse(response.text)
+            try:
+                return xmltodict.parse(first_pass['string']['#text'])
+            except Exception as e:
+                return root.text
